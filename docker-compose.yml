@@ -1,45 +1,60 @@
-version: '3.1'
-
 services:
   springboot:
-    image: dockerhandson/spring-boot-mongo:latest
-    restart: always # This will be ignored if we deploy in docker swarm
+    image: bhargav11413/spring-app:1.0
+    container_name: spring-boot-app
+    restart: always
     environment:
-    - MONGO_DB_HOSTNAME=mongo
-    - MONGO_DB_USERNAME=devdb
-    - MONGO_DB_PASSWORD=devdb123
+      - MONGO_DB_HOSTNAME=mongo
+      - MONGO_DB_PORT=27017
+      - MONGO_DB_USERNAME=root
+      - MONGO_DB_PASSWORD=example
     ports:
-      - 8080:8080
-    working_dir: /opt/app
+      - "8080:8080"
     depends_on:
-      - mongo
+      mongo:
+        condition: service_healthy
     networks:
-    - springappnetwork  
-    deploy:  # This will be considered only in docker swarm.
-      replicas: 2
-      update_config:
-        parallelism: 1
-        delay: 20s
-      restart_policy:
-        condition: on-failure
-        delay: 10s
-        max_attempts: 5
+      - springappnetwork
 
   mongo:
-    image: mongo
-    environment:
-    - MONGO_INITDB_ROOT_USERNAME=devdb
-    - MONGO_INITDB_ROOT_PASSWORD=devdb123
-    volumes:
-      - mongodb:/data/db
+    image: mongo:4.4
+    container_name: mongodb-server
     restart: always
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: root
+      MONGO_INITDB_ROOT_PASSWORD: example
+      MONGO_INITDB_DATABASE: users
+    volumes:
+      - mongodb_data:/data/db
+    healthcheck:
+      test: ["CMD", "mongo", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
     networks:
-    - springappnetwork
-    
+      - springappnetwork
+
+  mongo-express:
+    image: mongo-express
+    container_name: mongo-express
+    restart: always
+    ports:
+      - "8081:8081"
+    environment:
+      ME_CONFIG_MONGODB_URL: mongodb://root:example@mongo:27017/
+      ME_CONFIG_BASICAUTH_ENABLED: "true"
+      ME_CONFIG_BASICAUTH_USERNAME: mongoexpressuser
+      ME_CONFIG_BASICAUTH_PASSWORD: mongoexpresspass
+    depends_on:
+      mongo:
+        condition: service_healthy
+    networks:
+      - springappnetwork
+
 volumes:
-  mongodb:
-    external: true
-    
+  mongodb_data:
+
 networks:
   springappnetwork:
-    external: true
+    driver: bridge
